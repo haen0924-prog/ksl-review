@@ -1574,7 +1574,7 @@ function openDB(){
   });
 }
 const dbGet=(store,key)=>new Promise((r,j)=>{const tx=db.transaction(store,'readonly');const q=tx.objectStore(store).get(key);q.onsuccess=()=>r(q.result||null);q.onerror=()=>j(q.error)});
-const dbPut=(store,val,key)=>new Promise((r,j)=>{const tx=db.transaction(store,'readwrite');tx.objectStore(store).put(val,key);tx.oncomplete=()=>r();tx.onerror=()=>j(tx.error)});
+const dbPut=(store,val,key)=>new Promise((r,j)=>{try{const tx=db.transaction(store,'readwrite');tx.objectStore(store).put(val,key);tx.oncomplete=()=>r();tx.onerror=()=>j(tx.error||new Error('저장 오류'));tx.onabort=()=>j(tx.error||new Error('저장 취소됨'));}catch(e){j(e)}});
 const dbDel=(store,key)=>new Promise((r,j)=>{const tx=db.transaction(store,'readwrite');tx.objectStore(store).delete(key);tx.oncomplete=()=>r();tx.onerror=()=>j(tx.error)});
 const dbGetAll=(store)=>new Promise((r,j)=>{const tx=db.transaction(store,'readonly');const q=tx.objectStore(store).getAll();q.onsuccess=()=>r(q.result||[]);q.onerror=()=>j(q.error)});
 const dbGetAllKeys=(store)=>new Promise((r,j)=>{const tx=db.transaction(store,'readonly');const q=tx.objectStore(store).getAllKeys();q.onsuccess=()=>r(q.result||[]);q.onerror=()=>j(q.error)});
@@ -2364,12 +2364,32 @@ async function renderUploadGrid(){
   });
 }
 async function handleUpload(e,id){
-  const file=e.target.files[0]; if(!file)return;
+  const file=e.target.files[0]; e.target.value=''; if(!file)return;
+  const mb=file.size/1048576;
+  if(mb>150 && !confirm(`영상이 ${Math.round(mb)}MB로 커요. 저장이 오래 걸리거나 실패할 수 있어요.\n5~10초 정도로 짧게 찍으면 좋아요. 그래도 저장할까요?`)) return;
   const sp=$(`sp-${id}`); if(sp)sp.style.display='inline-block';
-  await clearVideoURL(id);
-  await dbPut(DB_STORE,file,id);
+  toast('📹 영상 저장 중…', 60000);
+  try{
+    // 휴대폰 브라우저 호환: 파일을 한 번 읽어서 새로 만든 영상 데이터로 저장
+    const buf=await Promise.race([file.arrayBuffer(), new Promise((_,j)=>setTimeout(()=>j(new Error('영상 파일 읽기 시간 초과')),60000))]);
+    const blob=new Blob([buf],{type:file.type||'video/mp4'});
+    await clearVideoURL(id);
+    await Promise.race([dbPut(DB_STORE,blob,id), new Promise((_,j)=>setTimeout(()=>j(new Error('저장 시간 초과')),60000))]);
+    if(navigator.storage&&navigator.storage.persist) navigator.storage.persist().catch(()=>{});
+  }catch(err){
+    if(sp)sp.style.display='none';
+    toast('⚠️ 영상 저장 실패',3000);
+    const m=(err&&(err.name||'')+' '+(err.message||''))||'';
+    alert('영상을 저장하지 못했어요.\n\n'
+      +(/Quota/i.test(m)?'휴대폰 저장 공간이 부족해요. 영상을 짧게 다시 찍어 주세요.\n':'')
+      +'• 카카오톡 안에서 열었다면: 오른쪽 위 ⋮ → "다른 브라우저로 열기"(크롬·사파리)\n'
+      +'• 비공개(시크릿) 모드라면 일반 모드로 열어 주세요\n'
+      +'• 영상을 5~10초로 짧게 찍어 주세요\n\n(오류 내용: '+m.trim()+')');
+    return;
+  }
   uploadedIds.add(id);
   if(sp)sp.style.display='none';
+  toast('✅ 영상이 저장됐어요');
   const url=await getVideoURL(id);
   const prev=$(`up-${id}`);
   if(prev&&url)prev.innerHTML=`<video src="${url}" style="width:100%;height:80px;object-fit:contain" controls></video>`;
@@ -2696,7 +2716,10 @@ async function rpc(fn, args){
   const headers={'apikey':SUPABASE_KEY,'Content-Type':'application/json'};
   if(SUPABASE_KEY.startsWith('eyJ')) headers['Authorization']='Bearer '+SUPABASE_KEY;
   const r=await fetch(`${SUPABASE_URL.replace(/\/$/,'')}/rest/v1/rpc/${fn}`,{method:'POST',headers,body:JSON.stringify(args)});
-  if(!r.ok) throw new Error('HTTP '+r.status);
+  if(!r.ok){
+    let m=''; try{ const j=await r.json(); m=j.message||j.hint||JSON.stringify(j); }catch(_){}
+    throw new Error('HTTP '+r.status+(m?' · '+m:''));
+  }
   const txt=await r.text();
   return txt ? JSON.parse(txt) : null;
 }
@@ -2758,7 +2781,7 @@ async function loadClass(code){
   }catch(e){
     if(e.message==='NO_CONFIG') return 'NO_CONFIG';
     try{ d=JSON.parse(lsGet('ksl_cache_'+code)||'null'); }catch(_){}
-    if(!d) return 'NETWORK';
+    if(!d) return errMsg(e);
     toast('인터넷이 안 돼서 마지막으로 받은 내용으로 열었어요', 3500);
   }
   CLASS_CODE=code; previewMode=false;
@@ -2792,7 +2815,7 @@ async function doCloudSave(){
     else if(r==='WRONG_PIN'||r==='LOCKED'||r==='NOT_FOUND'){ toast('⚠️ 저장 안 됨',3000); alert('비밀번호가 맞지 않아 저장하지 못했어요.\n설정 화면에서 로그아웃 후 다시 로그인해 주세요.'); }
     else if(r==='TOO_LARGE'){ alert('내용이 너무 많아 저장하지 못했어요.'); }
     else toast('⚠️ 저장 실패: '+r, 4000);
-  }catch(e){ toast('⚠️ 인터넷 연결을 확인해 주세요. 아직 저장되지 않았어요.', 5000); }
+  }catch(e){ toast('⚠️ 저장되지 않았어요', 4000); alert(errMsg(e)); }
   saving=false;
   if(saveAgain){ saveAgain=false; doCloudSave(); }
 }
@@ -2815,8 +2838,19 @@ function showLpForm(id){
   $('lpTeacherMenu').style.display=id?'none':'';
   if(id) setTimeout(()=>{ const el=$(id).querySelector('input'); el&&el.focus(); },50);
 }
+// 오류를 알기 쉬운 말로 바꾸기
+function errMsg(e){
+  const m=(e&&e.message)||String(e);
+  if(m==='NO_CONFIG') return '관리자 설정(SUPABASE_URL, SUPABASE_KEY)이 아직 비어 있어요.';
+  if(m.startsWith('HTTP 404')||/Could not find the function|PGRST202/.test(m))
+    return 'Supabase에 준비 작업(supabase-setup.sql)이 아직 안 되어 있어요.\nSupabase → SQL Editor에서 SQL을 실행해 주세요.\n\n(오류 내용: '+m+')';
+  if(m.startsWith('HTTP 401')||m.startsWith('HTTP 403'))
+    return 'SUPABASE_KEY(키)가 맞지 않아요.\nProject Settings → API Keys의 anon(public) 키 또는 publishable 키를 넣어 주세요.\n(service_role / secret 키는 안 돼요)\n\n(오류 내용: '+m+')';
+  if(m.startsWith('HTTP')) return 'Supabase 서버 오류가 났어요.\n\n(오류 내용: '+m+')';
+  return 'Supabase에 연결하지 못했어요.\nSUPABASE_URL이 https://xxxx.supabase.co 형태인지 확인해 주세요.\n(끝에 /rest/v1 등이 붙으면 안 돼요)\n\n(현재 주소: '+SUPABASE_URL+')\n(오류 내용: '+m+')';
+}
 function loadMsg(r){
-  return {NOT_FOUND:'강의실 코드를 찾을 수 없어요. 코드를 다시 확인해 주세요.', NETWORK:'인터넷 연결을 확인해 주세요.', NO_CONFIG:'관리자 설정(SUPABASE_URL, KEY)이 아직 안 되어 있어요.'}[r]||('오류: '+r);
+  return {NOT_FOUND:'강의실 코드를 찾을 수 없어요. 코드를 다시 확인해 주세요.', NETWORK:'인터넷 연결을 확인해 주세요.', NO_CONFIG:'관리자 설정(SUPABASE_URL, KEY)이 아직 안 되어 있어요.'}[r]||r;
 }
 async function studentEnter(){
   const code=$('lpStudentCode').value.trim().toUpperCase();
@@ -2848,7 +2882,7 @@ async function createClass(){
     await loadClass(r);
     goSettings();
     alert(`🎉 강의실이 만들어졌어요!\n\n강의실 코드: ${r}\n비밀번호: 만들 때 입력한 숫자\n\n코드와 비밀번호는 꼭 메모해 두세요.\n다른 기기에서 수정할 때 필요해요.`);
-  }catch(e){ alert(loadMsg(e.message==='NO_CONFIG'?'NO_CONFIG':'NETWORK')); }
+  }catch(e){ alert(errMsg(e)); }
   finally{ $('lcBtn').disabled=false; }
 }
 async function openTeacher(){
@@ -2861,7 +2895,7 @@ async function openTeacher(){
     else if(r==='WRONG_PIN') alert('비밀번호가 맞지 않아요.\n(5번 틀리면 10분 동안 잠겨요)');
     else if(r==='LOCKED') alert('비밀번호를 여러 번 틀려서 10분 동안 잠겼어요. 잠시 후 다시 해 주세요.');
     else alert(loadMsg(r));
-  }catch(e){ alert(loadMsg(e.message==='NO_CONFIG'?'NO_CONFIG':'NETWORK')); }
+  }catch(e){ alert(errMsg(e)); }
   finally{ $('loBtn').disabled=false; }
 }
 function teacherLogout(){
