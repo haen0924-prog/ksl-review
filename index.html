@@ -134,6 +134,17 @@ body::before{content:'';position:fixed;inset:0;
 .opt.correct{border-color:var(--ok)!important;background:rgba(58,138,80,.1)!important;animation:pulse .4s}
 .opt.wrong{border-color:var(--err)!important;background:rgba(224,80,80,.07)!important;animation:shk .35s}
 .opt:disabled{cursor:not-allowed;opacity:.85}
+#w2sOpts{grid-template-columns:1fr 1fr!important}
+.w2s-opt{padding:0;cursor:default}
+.w2s-opt:hover{transform:none!important;box-shadow:none!important}
+.w2s-vwrap{position:relative;cursor:pointer;background:#111}
+.w2s-vwrap video{width:100%;height:120px;display:block;object-fit:contain;background:#111;pointer-events:none}
+.w2s-play{position:absolute;inset:0;display:none;align-items:center;justify-content:center;font-size:30px;color:#fff;background:rgba(0,0,0,.35);pointer-events:none}
+.w2s-vwrap.paused .w2s-play{display:flex}
+.w2s-ans{font-size:13px;font-weight:700;color:var(--g1);padding:6px 4px 0;display:none}
+.w2s-done .w2s-ans{display:block}
+.w2s-pick{width:calc(100% - 12px);margin:6px;padding:9px 4px;border-radius:9px;border:1.5px solid var(--g2);background:#fff;color:var(--g1);font-size:13px;font-weight:700;cursor:pointer;font-family:'Noto Sans KR',sans-serif}
+.w2s-pick:disabled{opacity:.5;cursor:default}
 
 /* ── 피드백 · 다음 ── */
 .fb{display:none;padding:10px 13px;border-radius:11px;font-size:12px;font-weight:700;margin-bottom:11px;text-align:center;line-height:1.7}
@@ -610,9 +621,9 @@ body.teacher .teacher-bar{display:flex}
       <div class="mc" onclick="showVocab()"><span class="ico">📖</span><div class="tit">단어 사전</div><div class="sub">전체 단어와 수어 영상</div><span class="tag">참고</span></div>
     </div>
 
-    <div id="extraModesSection" style="">
-      <div class="section-divider" data-label="문법 · 문장"></div>
-      <div class="mode-grid" id="extraModesGrid"><div class="mc" onclick="startMode('sentence')"><span class="ico">📐</span><div class="tit">문장 순서</div><div class="sub">수어 카드 순서 배열</div><span class="tag">터치</span></div><div class="mc" onclick="goWordManage(2)" style="border-color:rgba(240,168,48,.3)"><span class="ico">⚙️</span><div class="tit">문제 관리</div><div class="sub">단어·오답·문장 수정</div><span class="tag" style="background:rgba(240,168,48,.12);color:var(--g3)">관리</span></div></div>
+    <div id="extraModesSection" class="admin-only">
+      <div class="section-divider" data-label="강사 메뉴"></div>
+      <div class="mode-grid" id="extraModesGrid"></div>
     </div>
 
     <button class="back-btn" style="margin-top:4px;color:var(--g1);border-color:rgba(45,80,22,.3)" onclick="goUpload()">📹 내 수어 영상 올리기</button>
@@ -1677,15 +1688,8 @@ async function goChapter(num, showChScreen=true){
   $('hdUploadBtn').style.display='';
   $('hdWordsBtn').style.display='';
 
-  // 문법·문장 모드 (오답/문장 데이터 있으면 표시)
-  const chWrong=WRONG_QUIZZES.filter(q=>q.chapter===num);
-  const chSen=SENTENCE_QUIZZES.filter(q=>q.chapter===num);
-  const extra=[];
-  if(chWrong.length>0) extra.push(`<div class="mc" onclick="startMode('wrong')"><span class="ico">🔍</span><div class="tit">오답 찾기</div><div class="sub">틀린 응답 수어 찾기</div><span class="tag">오답</span></div>`);
-  if(chSen.length>0) extra.push(`<div class="mc" onclick="startMode('sentence')"><span class="ico">📐</span><div class="tit">문장 순서</div><div class="sub">수어 카드 순서 배열</div><span class="tag">터치</span></div>`);
-  extra.push(`<div class="mc admin-only" onclick="goWordManage(${num})" style="border-color:rgba(240,168,48,.3)"><span class="ico">⚙️</span><div class="tit">문제 관리</div><div class="sub">단어·오답·문장 수정</div><span class="tag" style="background:rgba(240,168,48,.12);color:var(--g3)">관리</span></div>`);
-  $('extraModesSection').style.display='';
-  $('extraModesGrid').innerHTML=extra.join('');
+  // 강사용: 단어 관리
+  $('extraModesGrid').innerHTML=`<div class="mc" onclick="goWordManage(${num})" style="border-color:rgba(240,168,48,.3)"><span class="ico">📝</span><div class="tit">단어 관리</div><div class="sub">단어 추가·수정·삭제</div><span class="tag" style="background:rgba(240,168,48,.12);color:var(--g3)">강사</span></div>`;
 
   if(showChScreen) show('chapterScreen');
 }
@@ -1755,14 +1759,7 @@ function goWords(){
         <div class="wi-meanings">${v.meanings.join(' · ')}</div>
       </div>
       <div class="wi-cat">${v.cat}</div>
-    </div>`).join('')
-  + `<div style="border-top:2px solid var(--border);margin-top:14px;padding-top:14px">
-      <div class="sec-title" style="margin-bottom:8px">📐 문제 관리</div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="add-word-btn" style="background:var(--surface);color:var(--text);border:1.5px solid var(--border)" onclick="goWrongManage()">🔍 오답 찾기 관리</button>
-        <button class="add-word-btn" style="background:var(--surface);color:var(--text);border:1.5px solid var(--border)" onclick="goSentenceManage()">💬 문장 순서 관리</button>
-      </div>
-    </div>`;
+    </div>`).join('');
   show('wordsScreen');
 }
 
@@ -2003,6 +2000,7 @@ function startMode(m){
   if(pool.length<2){alert('퀴즈를 위해 최소 2개 이상의 단어가 필요해요. 단어를 추가해 주세요!');return;}
   const withV=pool.filter(v=>uploadedIds.has(v.id));
   if(withV.length===0){alert('아직 올린 수어 영상이 없어요.\n📹 영상 관리에서 먼저 영상을 올려주세요!\n(카드 학습·단어 사전은 바로 볼 수 있어요)');return;}
+  if(m==='w2s'&&withV.length<2){alert('단어→수어 문제는 영상이 2개 이상 있어야 해요.\n📹 영상을 하나 더 올려주세요!');return;}
   qIdx=0; qOk=0; qTotal=Math.min(10,withV.length);
   qList=shuf(withV).slice(0,qTotal);
   if(m==='s2w'){show('s2wScreen');renderS2W();}
@@ -2098,23 +2096,31 @@ async function renderW2S(){
   $('w2sCat').textContent=q.cat; $('w2sWord').textContent=q.quizWord;
   $('w2sFb').className='fb'; $('w2sNxt').className='nxt';
   const pool=getQuizPool();
-  const others=shuf(pool.filter(v=>v.id!==q.id)).slice(0,3);
+  // 보기는 영상이 있는 단어만, 한글은 답을 고른 뒤에 공개
+  const others=shuf(pool.filter(v=>v.id!==q.id&&uploadedIds.has(v.id))).slice(0,3);
   const opts=shuf([q,...others]);
-  const cont=$('w2sOpts'); cont.innerHTML='';
-  for(const opt of opts){
-    const b=document.createElement('button'); b.dataset.id=opt.id;
+  const cont=$('w2sOpts'); cont.innerHTML=''; cont.classList.remove('w2s-done');
+  for(let i=0;i<opts.length;i++){
+    const opt=opts[i];
     const url=await getVideoURL(opt.id);
-    if(url){b.className='opt video-opt';b.innerHTML=`<video src="${url}" height="100" muted playsinline style="background:#111;pointer-events:none;width:100%;object-fit:contain"></video><div class="ov-lbl">${opt.quizWord}</div>`;}
-    else{b.className='opt novideo-opt';b.innerHTML=`<div class="ow">${opt.quizWord}</div><div class="ow-alts">${opt.meanings.slice(0,2).join(' · ')}</div>`;}
-    b.onclick=()=>{
+    const b=document.createElement('div'); b.className='opt w2s-opt'; b.dataset.id=opt.id;
+    b.innerHTML=`<div class="w2s-vwrap"><video src="${url||''}" muted loop playsinline autoplay preload="auto"></video><div class="w2s-play">▶</div></div><div class="w2s-ans">${esc(opt.quizWord)}</div><button class="w2s-pick">${i+1}번 선택</button>`;
+    const wrap=b.querySelector('.w2s-vwrap'), vid=b.querySelector('video');
+    const sync=()=>wrap.classList.toggle('paused',vid.paused);
+    vid.addEventListener('play',sync); vid.addEventListener('pause',sync);
+    wrap.onclick=()=>{ if(vid.paused){vid.play().catch(()=>{});} else {vid.currentTime=0;} };
+    b.querySelector('.w2s-pick').onclick=()=>{
       const ok=opt.id===q.id;
       b.classList.add(ok?'correct':'wrong');
-      cont.querySelectorAll('.opt').forEach(btn=>{btn.disabled=true;if(parseInt(btn.dataset.id)===q.id)btn.classList.add('correct');});
+      cont.querySelectorAll('.w2s-pick').forEach(btn=>btn.disabled=true);
+      cont.querySelectorAll('.opt').forEach(o=>{if(parseInt(o.dataset.id)===q.id)o.classList.add('correct');});
+      cont.classList.add('w2s-done');
       if(ok)qOk++;
       showFb('w2sFb',ok,ok?'✅ 정답!':'❌ 틀렸어요. 초록 테두리가 정답이에요.');
       $('w2sNxt').className='nxt show';
     };
     cont.appendChild(b);
+    vid.play().then(sync).catch(sync);
   }
 }
 
@@ -2873,7 +2879,7 @@ async function createClass(){
   let data;
   if(tpl){
     data={v:1, meta:{bookTitle:book, className:cls, unit:'과', maxWordId:Math.max(...VOCAB_DEFAULT.map(v=>v.id))},
-      chapters:clone(CHAPTERS_DEFAULT), vocab:clone(VOCAB_DEFAULT), wrong:clone(WRONG_QUIZ_DEFAULT), sentence:clone(SENTENCE_QUIZ_DEFAULT)};
+      chapters:clone(CHAPTERS_DEFAULT), vocab:clone(VOCAB_DEFAULT), wrong:[], sentence:[]};
   }else{
     const n=Math.min(30,Math.max(1,parseInt($('lcWeeks').value)||8)), unit=$('lcUnit').value;
     data={v:1, meta:{bookTitle:book, className:cls, unit, maxWordId:0},
