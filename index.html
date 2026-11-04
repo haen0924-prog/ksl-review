@@ -1036,10 +1036,7 @@ const VOCAB_DEFAULT = [
   {id:1120,chapter:12,word:'이메일',     cat:'통신',   quizWord:'이메일',      meanings:['이메일','메일']},
 ];
 
-const WRONG_QUIZ_DEFAULT = [
-  {id:1, chapter:1, context:'상황: "00시까지 들어와야 해." 라는 말에 대한 긍정 응답', wrongWordId:28, optionWordIds:[24,26,27,28], explanation:'"응(주먹)"은 친한 사이에서만 사용하므로 공식적인 상황에서는 "예", "맞다", "알다"가 더 적절해요.'},
-  {id:2, chapter:1, context:'상황: "이름이 000 맞아요?" 라는 질문에 대한 긍정 응답', wrongWordId:10, optionWordIds:[24,26,27,10], explanation:'"알아요"는 정보를 알고 있다는 뜻이므로, 이름 확인 질문에는 "맞다", "예", "알다"가 더 자연스러워요.'},
-];
+const WRONG_QUIZ_DEFAULT = [];
 
 // 앱 시작 시 빈 상태 (프리셋 또는 IndexedDB에서 불러옴)
 let VOCAB = [];
@@ -1649,6 +1646,18 @@ function openManual(){
             <li><strong>OX 퀴즈</strong> — 수어-단어 쌍이 맞는지 판단</li>
             <li><strong>총 복습</strong> — 전체 단원 랜덤 퀴즈</li>
           </ul>
+        </div>
+
+        <div style="background:rgba(224,80,80,.07);border-radius:14px;padding:15px 16px">
+          <div style="font-weight:700;font-size:14px;color:var(--err);margin-bottom:8px">🔍 오답 찾기 문제 만들기</div>
+          <ol style="margin:0;padding-left:18px;display:flex;flex-direction:column;gap:5px">
+            <li>과 화면 → <strong>⚙️ 문제 관리</strong> → <strong>🔍 오답 찾기 관리</strong>를 누르세요.</li>
+            <li><strong>상황 설명</strong>을 입력하세요. (예: 상황: "고마워요"에 어울리지 않는 수어는?)</li>
+            <li><strong>보기 단어 4개</strong>를 같은 과의 단어 중에서 선택하세요.</li>
+            <li><strong>정답(틀린 단어)</strong>을 4개 중 하나로 지정하세요.</li>
+            <li><strong>해설</strong>을 입력하면 정답 후 설명이 표시돼요. (선택)</li>
+            <li>저장하면 그 과 화면에 "오답 찾기" 모드가 자동으로 추가돼요.</li>
+          </ol>
         </div>
 
         <div style="background:rgba(0,0,0,.04);border-radius:14px;padding:15px 16px">
