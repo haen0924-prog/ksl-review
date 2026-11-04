@@ -386,7 +386,7 @@ body::before{content:'';position:fixed;inset:0;
       <button class="hd-btn" onclick="goAddWordFromHome()" style="padding:10px 16px;font-size:12px;border-radius:12px;color:#fff;background:var(--g2);border-color:var(--g2);font-weight:800">＋ 단어 추가</button>
       <button class="hd-btn" onclick="openAddChapterDialog()" style="padding:10px 16px;font-size:12px;border-radius:12px;color:var(--g1);border-color:rgba(45,80,22,.3)">＋ 단원 추가</button>
       <button class="hd-btn" onclick="goUploadAll()" style="padding:10px 16px;font-size:12px;border-radius:12px;color:var(--g1);border-color:rgba(45,80,22,.3)">📹 영상 관리</button>
-      <button class="hd-btn" onclick="exportUpdatedApp()" style="padding:10px 16px;font-size:12px;border-radius:12px;color:var(--g3);border-color:rgba(240,168,48,.4)">📤 배포 파일 만들기</button>
+      <button class="hd-btn" onclick="showExportModal()" style="padding:10px 16px;font-size:12px;border-radius:12px;color:var(--g3);border-color:rgba(240,168,48,.4)">📤 배포 파일 만들기</button>
     </div>
   </div>
 
@@ -2494,28 +2494,96 @@ async function importBackup(e){
 }
 
 // ════════════════════════════════════════════
-// 배포 파일 생성
+// 배포 파일 생성 (교재 선택 모달 포함)
 // ════════════════════════════════════════════
-async function exportUpdatedApp(){
-  if(!confirm('현재 단어·문제 데이터가 반영된 새 배포 파일을 만들까요?\n(영상은 포함되지 않아요)'))return;
+
+function syncCurrentBookToCustomBooks(){
+  if(!BOOK_TITLE || ACTIVE_PRESET.startsWith('ksl')) return;
+  const idx=CUSTOM_BOOKS.findIndex(b=>b.title===BOOK_TITLE);
+  const bookData={title:BOOK_TITLE,chapters:JSON.parse(JSON.stringify(CHAPTERS)),vocab:JSON.parse(JSON.stringify(VOCAB)),wrongQuizzes:JSON.parse(JSON.stringify(WRONG_QUIZZES||[])),updatedAt:Date.now()};
+  if(idx>=0) CUSTOM_BOOKS[idx]=bookData;
+  else CUSTOM_BOOKS.push(bookData);
+}
+
+function showExportModal(){
+  syncCurrentBookToCustomBooks();
+  const books=[];
+  if(ACTIVE_PRESET.startsWith('ksl') && BOOK_TITLE){
+    books.push({label:`📗 ${BOOK_TITLE} (현재 교재)`,type:'current'});
+  }
+  CUSTOM_BOOKS.forEach((b,i)=>{
+    const isCurrent=ACTIVE_PRESET==='custom_'+i;
+    const label=`📘 ${b.title}${isCurrent?' (현재 교재)':''} (${b.chapters?b.chapters.length:0}과 · ${b.vocab?b.vocab.length:0}단어)`;
+    books.push({label,type:'custom',idx:i});
+  });
+  if(books.length>1) books.push({label:'📦 모든 교재 한꺼번에 내보내기',type:'all'});
+  if(books.length===0){alert('내보낼 교재가 없어요.\n먼저 교재를 만들어 주세요.');return;}
+  if(books.length===1){doExport(books[0]);return;}
+  const overlay=document.createElement('div');
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+  overlay.innerHTML=`
+    <div style="background:#fff;border-radius:20px;padding:24px;width:100%;max-width:360px;box-shadow:0 8px 40px rgba(0,0,0,.2)">
+      <div style="font-size:17px;font-weight:800;margin-bottom:6px">📤 배포 파일 만들기</div>
+      <div style="font-size:12px;color:#888;margin-bottom:18px">어떤 교재를 내보낼까요?</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        ${books.map((b,i)=>`<button onclick="window._expChoice(${i})" style="padding:12px 16px;border-radius:12px;border:1.5px solid #e8dfc8;background:#fffdf8;font-size:13px;font-weight:700;cursor:pointer;text-align:left;font-family:'Noto Sans KR',sans-serif">${b.label}</button>`).join('')}
+      </div>
+      <button id="_expCancelBtn" style="margin-top:16px;width:100%;padding:10px;border-radius:12px;border:none;background:#f5f5f5;font-size:13px;font-weight:700;cursor:pointer;font-family:'Noto Sans KR',sans-serif">취소</button>
+    </div>`;
+  window._expChoice=(i)=>{overlay.remove();doExport(books[i]);};
+  document.body.appendChild(overlay);
+  document.getElementById('_expCancelBtn').onclick=()=>overlay.remove();
+}
+
+async function doExport(choice){
+  const today=new Date().toISOString().slice(0,10).replace(/-/g,'');
   const res=await fetch(location.href);
   let html=await res.text();
-  const today=new Date().toISOString().slice(0,10).replace(/-/g,'');
-  html=html.replace(/const VOCAB_DEFAULT = \[[\s\S]*?\];/,`const VOCAB_DEFAULT = ${JSON.stringify(VOCAB,null,2)};`);
-  html=html.replace(/const WRONG_QUIZ_DEFAULT = \[[\s\S]*?\];/,`const WRONG_QUIZ_DEFAULT = ${JSON.stringify(WRONG_QUIZZES,null,2)};`);
-  // 교재명과 단원 정보도 반영
-  if(BOOK_TITLE) html=html.replace(/let BOOK_TITLE = '';/,`let BOOK_TITLE = ${JSON.stringify(BOOK_TITLE)};`);
-  if(CHAPTERS.length>0) html=html.replace(/const CHAPTERS_DEFAULT = \[[\s\S]*?\];/,`const CHAPTERS_DEFAULT = ${JSON.stringify(CHAPTERS,null,2)};`);
-  if(CUSTOM_BOOKS.length>0) html=html.replace(/let CUSTOM_BOOKS = \[\];/,`let CUSTOM_BOOKS = ${JSON.stringify(CUSTOM_BOOKS)};`);
-  if(ACTIVE_PRESET) html=html.replace(/let ACTIVE_PRESET = '';/,`let ACTIVE_PRESET = ${JSON.stringify(ACTIVE_PRESET)};`);
-  html=html.replace(/const DB_NAME = '.*?';/,`const DB_NAME = 'signLangAll_${today}';`);
-  const blob=new Blob([html],{type:'text/html'});
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(blob);
-  a.download=`한국수어_학습앱_${today}.html`;
-  a.click(); URL.revokeObjectURL(a.href);
-  alert('✅ 배포 파일이 저장됐어요!\n\n📂 저장 위치: 기기의 [다운로드] 폴더\n📄 파일명: 한국수어_학습앱_날짜.html\n\n이 파일을 수강생에게 공유해 주세요.');
+  if(choice.type==='all'){
+    html=html.replace(/const VOCAB_DEFAULT = \[[\s\S]*?\];/,`const VOCAB_DEFAULT = ${JSON.stringify(VOCAB,null,2)};`);
+    html=html.replace(/const WRONG_QUIZ_DEFAULT = \[[\s\S]*?\];/,`const WRONG_QUIZ_DEFAULT = ${JSON.stringify(WRONG_QUIZZES||[],null,2)};`);
+    if(BOOK_TITLE) html=html.replace(/let BOOK_TITLE = '';/,`let BOOK_TITLE = ${JSON.stringify(BOOK_TITLE)};`);
+    if(CHAPTERS.length>0) html=html.replace(/const CHAPTERS_DEFAULT = \[[\s\S]*?\];/,`const CHAPTERS_DEFAULT = ${JSON.stringify(CHAPTERS,null,2)};`);
+    if(CUSTOM_BOOKS.length>0) html=html.replace(/let CUSTOM_BOOKS = \[\];/,`let CUSTOM_BOOKS = ${JSON.stringify(CUSTOM_BOOKS)};`);
+    if(ACTIVE_PRESET) html=html.replace(/let ACTIVE_PRESET = '';/,`let ACTIVE_PRESET = ${JSON.stringify(ACTIVE_PRESET)};`);
+    html=html.replace(/const DB_NAME = '.*?';/,`const DB_NAME = 'signLangAll_${today}';`);
+    const fname=`한국수어_학습앱_전체_${today}.html`;
+    const blob=new Blob([html],{type:'text/html'});
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=fname;a.click();URL.revokeObjectURL(a.href);
+    alert(`✅ 전체 교재 배포 파일이 저장됐어요!\n\n📄 파일명: ${fname}`);
+    return;
+  }
+  if(choice.type==='current'){
+    html=html.replace(/const VOCAB_DEFAULT = \[[\s\S]*?\];/,`const VOCAB_DEFAULT = ${JSON.stringify(VOCAB,null,2)};`);
+    html=html.replace(/const WRONG_QUIZ_DEFAULT = \[[\s\S]*?\];/,`const WRONG_QUIZ_DEFAULT = ${JSON.stringify(WRONG_QUIZZES||[],null,2)};`);
+    html=html.replace(/let BOOK_TITLE = '';/,`let BOOK_TITLE = ${JSON.stringify(BOOK_TITLE)};`);
+    if(CHAPTERS.length>0) html=html.replace(/const CHAPTERS_DEFAULT = \[[\s\S]*?\];/,`const CHAPTERS_DEFAULT = ${JSON.stringify(CHAPTERS,null,2)};`);
+    html=html.replace(/let ACTIVE_PRESET = '';/,`let ACTIVE_PRESET = ${JSON.stringify(ACTIVE_PRESET)};`);
+    html=html.replace(/let CUSTOM_BOOKS = \[\];/,'let CUSTOM_BOOKS = [];');
+    html=html.replace(/const DB_NAME = '.*?';/,`const DB_NAME = 'signLangAll_${today}';`);
+    const fname=`한국수어_학습앱_${BOOK_TITLE.replace(/\s/g,'')}_${today}.html`;
+    const blob=new Blob([html],{type:'text/html'});
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=fname;a.click();URL.revokeObjectURL(a.href);
+    alert(`✅ 배포 파일이 저장됐어요!\n\n📄 파일명: ${fname}`);
+    return;
+  }
+  if(choice.type==='custom'){
+    const book=CUSTOM_BOOKS[choice.idx];
+    html=html.replace(/const VOCAB_DEFAULT = \[[\s\S]*?\];/,`const VOCAB_DEFAULT = ${JSON.stringify(book.vocab||[],null,2)};`);
+    html=html.replace(/const WRONG_QUIZ_DEFAULT = \[[\s\S]*?\];/,`const WRONG_QUIZ_DEFAULT = ${JSON.stringify(book.wrongQuizzes||[],null,2)};`);
+    html=html.replace(/let BOOK_TITLE = '';/,`let BOOK_TITLE = ${JSON.stringify(book.title)};`);
+    html=html.replace(/const CHAPTERS_DEFAULT = \[[\s\S]*?\];/,`const CHAPTERS_DEFAULT = ${JSON.stringify(book.chapters||[],null,2)};`);
+    html=html.replace(/let CUSTOM_BOOKS = \[\];/,`let CUSTOM_BOOKS = ${JSON.stringify([{title:book.title,chapters:book.chapters||[],vocab:book.vocab||[],wrongQuizzes:book.wrongQuizzes||[],updatedAt:book.updatedAt}])};`);
+    html=html.replace(/let ACTIVE_PRESET = '';/,`let ACTIVE_PRESET = 'custom_0';`);
+    html=html.replace(/const DB_NAME = '.*?';/,`const DB_NAME = 'signLangAll_${today}';`);
+    const fname=`한국수어_학습앱_${book.title.replace(/\s/g,'')}_${today}.html`;
+    const blob=new Blob([html],{type:'text/html'});
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=fname;a.click();URL.revokeObjectURL(a.href);
+    alert(`✅ 배포 파일이 저장됐어요!\n\n📄 파일명: ${fname}`);
+  }
 }
+
+async function exportUpdatedApp(){ showExportModal(); }
 
 // ════════════════════════════════════════════
 // INIT
